@@ -1,65 +1,300 @@
-import Image from "next/image";
+'use client';
+import { useState } from 'react';
+import { ChevronDown, Copy, ExternalLink, Info, Maximize2 } from 'lucide-react';
+import { MetricCard } from '@/components/MetricCard';
+import { hourlyDataToday, weeklyData, monthlyData, topVerkocht, topOmzet, statsToday } from '@/lib/mockData';
 
-export default function Home() {
+const fmtEur = (n: number) =>
+  new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n);
+
+const PERIODE_OPTIONS = [
+  { label: 'Vandaag', value: 'vandaag', display: '01-07-2026' },
+  { label: 'Gisteren', value: 'gisteren', display: '30-06-2026' },
+  { label: 'Afgelopen 7 dagen', value: '7d', display: '25-06 – 01-07-2026' },
+  { label: 'Afgelopen 28 dagen', value: '28d', display: '04-06 – 01-07-2026' },
+  { label: 'Deze maand', value: 'maand', display: 'Juni 2026' },
+  { label: 'Vorige maand', value: 'vorigemaand', display: 'Mei 2026' },
+];
+
+const PRODUCTGROEPEN = [
+  'Alle productgroepen',
+  'Weerstandsbanden',
+  'Creditcardhouders',
+  'Portemonnees',
+];
+
+export default function DashboardPage() {
+  const [periode, setPeriode] = useState('vandaag');
+  const [periodeOpen, setPeriodeOpen] = useState(false);
+  const [vergelijken, setVergelijken] = useState(false);
+  const [productgroep, setProductgroep] = useState('Alle productgroepen');
+  const [productgroepOpen, setProductgroepOpen] = useState(false);
+  const [land, setLand] = useState<'nl' | 'be'>('nl');
+
+  const selected = PERIODE_OPTIONS.find(o => o.value === periode)!;
+
+  // Show hourly data for today, weekly data for longer periods
+  const chartData = periode === 'vandaag' || periode === 'gisteren'
+    ? hourlyDataToday
+    : periode === '7d'
+      ? weeklyData.map(d => ({ hour: d.dag, bestellingen: d.bestellingen, omzet: d.omzet, verkocht: d.verkocht }))
+      : monthlyData.map(d => ({ hour: d.dag, bestellingen: d.bestellingen, omzet: d.omzet, verkocht: d.verkocht }));
+
+  const totaalBestellingen = chartData.reduce((s, d) => s + (d.bestellingen as number), 0);
+  const totaalOmzet = chartData.reduce((s, d) => s + (d.omzet as number), 0);
+  const totaalVerkocht = chartData.reduce((s, d) => s + (d.verkocht as number), 0);
+
+  const periodeLabel = periode === 'vandaag' ? 'Vandaag'
+    : periode === 'gisteren' ? 'Gisteren'
+    : periode === '7d' ? 'Afgelopen 7 dagen'
+    : periode === '28d' ? 'Afgelopen 28 dagen'
+    : periode === 'maand' ? 'Deze maand'
+    : 'Vorige maand';
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="p-6 md:p-8 max-w-[1400px]">
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-4 mb-6 bg-white border border-gray-200 rounded-lg px-4 py-3">
+        {/* Periode */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 flex items-center gap-1">
+            Periode <Info className="w-3 h-3 text-gray-400" />
+          </span>
+          <div className="relative">
+            <button
+              onClick={() => { setPeriodeOpen(o => !o); setProductgroepOpen(false); }}
+              className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-800 hover:border-gray-400 min-w-[140px] justify-between"
+            >
+              <span>{selected.display}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+            </button>
+            {periodeOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 w-56 py-1">
+                {PERIODE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setPeriode(opt.value); setPeriodeOpen(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${opt.value === periode ? 'font-semibold text-[#0000a4]' : 'text-gray-700'}`}
+                  >
+                    {opt.label}
+                    <span className="text-xs text-gray-400 ml-2">{opt.display}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* t.o.v. */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600">t.o.v.</span>
+          <button
+            onClick={() => setVergelijken(v => !v)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${vergelijken ? 'bg-[#0000a4]' : 'bg-gray-300'}`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${vergelijken ? 'translate-x-4' : 'translate-x-0.5'}`} />
+          </button>
+          <span className={`border border-gray-300 rounded px-3 py-1.5 text-sm min-w-[130px] text-center ${vergelijken ? 'text-gray-800' : 'text-gray-400 bg-gray-50'}`}>
+            30-06-2026
+          </span>
+        </div>
+
+        <div className="h-5 w-px bg-gray-200" />
+
+        {/* Productgroepen */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 flex items-center gap-1">
+            Productgroepen <Info className="w-3 h-3 text-gray-400" />
+          </span>
+          <div className="relative">
+            <button
+              onClick={() => { setProductgroepOpen(o => !o); setPeriodeOpen(false); }}
+              className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-800 hover:border-gray-400 min-w-[180px] justify-between"
+            >
+              <span>{productgroep}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+            </button>
+            {productgroepOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 w-56 py-1">
+                {PRODUCTGROEPEN.map(g => (
+                  <button
+                    key={g}
+                    onClick={() => { setProductgroep(g); setProductgroepOpen(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${g === productgroep ? 'font-semibold text-[#0000a4]' : 'text-gray-700'}`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="h-5 w-px bg-gray-200" />
+
+        {/* Land */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 flex items-center gap-1">
+            Land <Info className="w-3 h-3 text-gray-400" />
+          </span>
+          <div className="flex border border-gray-300 rounded overflow-hidden text-sm">
+            <button
+              onClick={() => setLand('nl')}
+              className={`px-4 py-1.5 ${land === 'nl' ? 'bg-[#0000a4] text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              Nederland
+            </button>
+            <button
+              onClick={() => setLand('be')}
+              className={`px-4 py-1.5 border-l border-gray-300 ${land === 'be' ? 'bg-[#0000a4] text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              België
+            </button>
+          </div>
+        </div>
+
+        <div className="ml-auto">
+          <button className="p-1.5 border border-gray-300 rounded hover:bg-gray-50" title="Volledig scherm">
+            <Maximize2 className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+      </div>
+
+      {/* 3 Metric cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <MetricCard
+          title="Bestellingen"
+          total={String(totaalBestellingen)}
+          data={chartData as { hour: string; [key: string]: number | string }[]}
+          dataKey="bestellingen"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <MetricCard
+          title="Omzet"
+          total={fmtEur(totaalOmzet)}
+          data={chartData as { hour: string; [key: string]: number | string }[]}
+          dataKey="omzet"
+          formatTick={(v) => v >= 1 ? `${v}` : v === 0 ? '0' : v.toFixed(0)}
+        />
+        <MetricCard
+          title="Verkocht"
+          total={String(totaalVerkocht)}
+          data={chartData as { hour: string; [key: string]: number | string }[]}
+          dataKey="verkocht"
+        />
+      </div>
+
+      {/* Product ranking tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Meest verkocht */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900 text-sm">Meest verkocht</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Meest verkochte artikelen in de periode: {periodeLabel}
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 w-14">Score</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-gray-500">Artikel</th>
+                <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Volume</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topVerkocht.map(row => (
+                <tr key={row.ean} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-700">{row.rank}</td>
+                  <td className="px-2 py-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
+                        {row.emoji}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium text-gray-900 text-xs truncate max-w-[160px]">{row.artikel}</span>
+                          <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-xs text-gray-400 font-mono">EAN: {row.ean}</span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(row.ean)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">{row.categorie}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{row.volume}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-5 py-3 border-t border-gray-100">
+            <a href="/products" className="text-xs text-[#0000a4] hover:underline font-medium">
+              &rsaquo; Bekijk alles
+            </a>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Meest omzet */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900 text-sm">Meest omzet</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Artikelen met het meeste omzet in de periode: {periodeLabel}
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 w-14">Score</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-gray-500">Artikel</th>
+                <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500">Volume</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topOmzet.map(row => (
+                <tr key={row.ean} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-700">{row.rank}</td>
+                  <td className="px-2 py-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded bg-gray-100 flex items-center justify-center text-base flex-shrink-0">
+                        {row.emoji}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium text-gray-900 text-xs truncate max-w-[160px]">{row.artikel}</span>
+                          <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-xs text-gray-400 font-mono">EAN: {row.ean}</span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(row.ean)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">{row.categorie}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{fmtEur(row.volume)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-5 py-3 border-t border-gray-100">
+            <a href="/products" className="text-xs text-[#0000a4] hover:underline font-medium">
+              &rsaquo; Bekijk alles
+            </a>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
